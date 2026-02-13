@@ -21,8 +21,6 @@
       </v-col>
     </v-row>
   </v-container>
-
-
   <v-container class="py-4">
     <v-row dense>
       <v-col
@@ -96,7 +94,6 @@
           <v-btn variant="text" @click="editPhoto">
             Edit
           </v-btn>
-
           <v-btn
             variant="text"
             color="red"
@@ -160,10 +157,17 @@
         />
         <v-combobox
           v-model="form.tags"
+          v-model:search="tagSearch"
+          :items="filteredTagOptions"
           label="Tags"
           multiple
           chips
           clearable
+          attach="body"
+          :menu-props="{
+            location: 'bottom',
+            maxHeight: 80
+          }"
         />
       </v-card-text>
       <v-card-actions>
@@ -193,6 +197,7 @@
   const deleteConfirm = ref(false)
 
   const selectedTag = ref(null)
+  const tagSearch = ref('')
 
   // アップロードフォーム
   const form = ref({
@@ -231,6 +236,19 @@
       count
     }))
     .sort((a, b) => a.name.localeCompare(b.name))
+  })
+
+  // タグ自動完成
+  const filteredTagOptions = computed(() => {
+    if (!tagSearch.value || tagSearch.value.length < 1) return []
+
+    return allTags.value
+      .map(t => t.name)
+      .filter(tag =>
+        tag.includes(tagSearch.value.toLowerCase())
+      )
+      .filter(tag => !form.value.tags.includes(tag))
+      .slice(0, 3)
   })
 
   function toggleTag(tagName) {
