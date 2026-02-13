@@ -1,8 +1,19 @@
 <template>
   <v-container class="py-0">
+    <v-row class="mb-2">
+      <v-col class="text-left">
+        <v-btn color="success" small @click="loginAsAdmin">
+          Login as Admin
+        </v-btn>
+        <v-btn color="grey" small @click="logout">
+          Logout
+        </v-btn>
+      </v-col>
+    </v-row>
+
     <v-row class="mb-4">
       <v-col class="text-right">
-        <v-btn color="primary" @click="openCreateModal">
+        <v-btn color="primary" v-if="isAdmin" @click="openCreateModal">
           Upload Photo
         </v-btn>
       </v-col>
@@ -91,12 +102,13 @@
             Close
           </v-btn>
 
-          <v-btn variant="text" @click="editPhoto">
+          <v-btn variant="text" v-if="isAdmin" @click="editPhoto">
             Edit
           </v-btn>
           <v-btn
             variant="text"
             color="red"
+            v-if="isAdmin"
             @click="deleteConfirm = true"
           >
             Delete
@@ -181,7 +193,12 @@
         <v-btn variant="text" @click="cancelForm">
           Cancel
         </v-btn>
-        <v-btn color="primary" variant="text" :disabled="!isFormValid" @click="savePhoto">
+        <v-btn
+          color="primary"
+          variant="text"
+          :disabled="!isFormValid"
+          @click="savePhoto"
+        >
           Save
         </v-btn>
       </v-card-actions>
@@ -190,8 +207,9 @@
 </template>
 
 <script setup>
-  import { ref, computed } from 'vue'
+  import { ref, computed, onMounted } from 'vue'
   import { useDisplay } from 'vuetify'
+  import { useAuthStore } from '@/stores/auth.js'
 
   const showModal = ref(false)
   const selectedPhoto = ref(null)
@@ -207,6 +225,21 @@
   const isFormValid = ref(false)
 
   const { smAndUp } = useDisplay()
+
+  // ユーザーログイン
+  const auth = useAuthStore()
+  const isAdmin = computed(() => auth.isAdmin)
+  onMounted(() => {
+    auth.loadUser()
+  })
+
+  function loginAsAdmin() {
+    auth.login({ id: 1, name: 'Admin', role: 'admin' })
+  }
+
+  function logout() {
+    auth.logout()
+  }
 
   // アップロードフォーム
   const form = ref({
