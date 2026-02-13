@@ -137,45 +137,51 @@
       <v-card-title>
         {{ isEditMode ? 'Edit Photo' : 'Upload Photo' }}
       </v-card-title>
-      <v-card-text>
-        <v-text-field
-          v-model="form.title"
-          label="Title"
-        />
-        <v-text-field
-          v-model="form.date"
-          label="Date"
-          type="date"
-        />
-        <v-textarea
-          v-model="form.description"
-          label="Description"
-        />
-        <v-text-field
-          v-model="form.images[0]"
-          label="Image URL"
-        />
-        <v-combobox
-          v-model="form.tags"
-          v-model:search="tagSearch"
-          :items="filteredTagOptions"
-          label="Tags"
-          multiple
-          chips
-          clearable
-          attach="body"
-          :menu-props="{
-            location: 'bottom',
-            maxHeight: 80
-          }"
-        />
-      </v-card-text>
+      <v-form ref="formRef" v-model="isFormValid">
+        <v-card-text>
+          <v-text-field
+            v-model="form.title"
+            label="Title"
+            :rules="[requiredRule]"
+          />
+          <v-text-field
+            v-model="form.date"
+            label="Date"
+            type="date"
+            :rules="[requiredRule]"
+          />
+          <v-textarea
+            v-model="form.description"
+            label="Description"
+          />
+          <v-text-field
+            v-model="form.images[0]"
+            label="Image URL"
+            :rules="[requiredRule]"
+          />
+          <v-combobox
+            v-model="form.tags"
+            v-model:search="tagSearch"
+            :items="filteredTagOptions"
+            label="Tags"
+            multiple
+            chips
+            clearable
+            attach="body"
+            :menu-props="{
+              location: 'bottom',
+              maxHeight: 80
+            }"
+            :rules="[requiredRule]"
+          />
+        </v-card-text>
+      </v-form>
       <v-card-actions>
         <v-spacer />
         <v-btn variant="text" @click="cancelForm">
           Cancel
         </v-btn>
-        <v-btn color="primary" variant="text" @click="savePhoto">
+        <v-btn color="primary" variant="text" :disabled="!isFormValid" @click="savePhoto">
           Save
         </v-btn>
       </v-card-actions>
@@ -190,14 +196,17 @@
   const showModal = ref(false)
   const selectedPhoto = ref(null)
   const hovering = ref(false)
-  const { smAndUp } = useDisplay()
-
-  const isEditMode = ref(false)
   const formModal = ref(false)
   const deleteConfirm = ref(false)
+  const isEditMode = ref(false)
 
   const selectedTag = ref(null)
   const tagSearch = ref('')
+
+  const formRef = ref(null)
+  const isFormValid = ref(false)
+
+  const { smAndUp } = useDisplay()
 
   // アップロードフォーム
   const form = ref({
@@ -219,6 +228,13 @@
       images: [],
       tags: [],
     }
+  }
+
+  const requiredRule = value => {
+    if (Array.isArray(value)) {
+      return value.length > 0 || 'Required field'
+    }
+    return !!value || 'Required field'
   }
 
   // タグ集計
@@ -334,6 +350,8 @@
 
   // アップロード、修正保存
   function savePhoto() {
+
+    if (!formRef.value.validate()) return
 
     const normalizedTags = form.value.tags.map(tag =>
       tag.trim().toLowerCase()
