@@ -1,209 +1,129 @@
 <template>
-  <v-container class="py-0">
-    <v-row class="mb-2">
-      <v-col class="text-left">
-        <v-btn color="success" small @click="loginAsAdmin">
-          Login as Admin
-        </v-btn>
-        <v-btn color="grey" small @click="logout">
-          Logout
-        </v-btn>
-      </v-col>
-    </v-row>
+  <div class="page-background">
+    <v-container class="py-1">
+      <v-row class="mb-2">
+        <v-col class="text-left pa-1">
+          <v-btn color="success" small @click="loginAsAdmin">
+            Login as Admin
+          </v-btn>
+          <v-btn color="grey" small @click="logout">
+            Logout
+          </v-btn>
+        </v-col>
+        <v-col class="text-right pa-1">
+          <v-btn color="primary" v-if="isAdmin" @click="openCreateModal">
+            Upload Photo
+          </v-btn>
+        </v-col>
+      </v-row>
 
-    <v-row class="mb-4">
-      <v-col class="text-right">
-        <v-btn color="primary" v-if="isAdmin" @click="openCreateModal">
-          Upload Photo
-        </v-btn>
-      </v-col>
-    </v-row>
-    <v-row>
-      <v-col>
-        <v-chip
-          v-for="tag in allTags"
-          :key="tag.name"
-          class="ma-1"
-          :color="selectedTag === tag.name ? 'primary' : undefined"
-          @click="toggleTag(tag.name)"
-        >
-          {{ formatTag(tag.name) }} ({{ tag.count }})
-        </v-chip>
-      </v-col>
-    </v-row>
-  </v-container>
-  <v-container class="py-4">
-    <v-row dense>
-      <v-col
-        v-for="photo in filteredPhotos"
-        :key="photo.id"
-        cols="12"
-        sm="6"
-        md="4"
-      >
+      <v-divider class="my-2" />
+
+      <v-row>
+        <v-col>
+          <v-chip
+            v-for="tag in allTags"
+            :key="tag.name"
+            class="ma-1"
+            :color="selectedTag === tag.name ? 'primary' : undefined"
+            @click="toggleTag(tag.name)"
+          >
+            {{ formatTag(tag.name) }} ({{ tag.count }})
+          </v-chip>
+        </v-col>
+      </v-row>
+    </v-container>
+    <v-container class="py-4">
+      <div class="gallery">
         <v-card
-          class="cursor-pointer"
+          v-for="photo in filteredPhotos"
+          :key="photo.id"
+          class="photo-card cursor-pointer"
           elevation="2"
           @click="openPhoto(photo)"
         >
-          <v-img :src="photo.images[0]" height="200" cover />
-          <v-card-title class="text-h6">
-            {{ photo.title }}
-          </v-card-title>
-          <v-card-subtitle class="text-subtitle-1">
-            {{ photo.date }}
-          </v-card-subtitle>
+          <v-img :src="photo.images[0]" class="gallery-image" />
+          <v-card-title class="text-h6">{{ photo.title }}</v-card-title>
+          <v-card-subtitle class="text-subtitle-1">{{ photo.date }}</v-card-subtitle>
         </v-card>
-      </v-col>
-    </v-row>
+      </div>
 
-    <v-dialog
-      v-model="showModal"
-      max-width="700"
-      persistent
-      transition="dialog-bottom-transition"
-    >
-      <v-card v-if="selectedPhoto" class="modal-card">
-        <div
-          @mouseenter="hovering = true"
-          @mouseleave="hovering = false"
-        >
-          <v-carousel
-            height="400"
-            hide-delimiter-background
-            :show-arrows="showArrows"
-            :cycle="false"
-            :continuous="false"
-          >
-            <v-carousel-item
-              v-for="(img, index) in selectedPhoto.images"
-              :key="index"
+      <v-dialog v-model="showModal" persistent scrollable width="auto">
+        <v-card v-if="selectedPhoto" class="modal-card">
+          <div @mouseenter="hovering = true" @mouseleave="hovering = false">
+            <v-carousel
+              hide-delimiters
+              :show-arrows="showArrows"
+              :cycle="false"
+              :continuous="false"
+              class="modal-carousel"
             >
-              <v-img :src="img" cover height="400" />
-            </v-carousel-item>
-          </v-carousel>
-        </div>
+              <v-carousel-item v-for="(img, index) in selectedPhoto.images" :key="index">
+                <div class="modal-image-wrapper">
+                  <img :src="img" class="modal-image" />
+                </div>
+              </v-carousel-item>
+            </v-carousel>
+          </div>
 
-        <v-card-title>
-          {{ selectedPhoto.title }}
-        </v-card-title>
+          <v-card-title>{{ selectedPhoto.title }}</v-card-title>
+          <v-card-subtitle>{{ selectedPhoto.date }}</v-card-subtitle>
 
-        <v-card-subtitle>
-          {{ selectedPhoto.date }}
-        </v-card-subtitle>
+          <v-card-text v-if="selectedPhoto.description">{{ selectedPhoto.description }}</v-card-text>
 
-        <v-card-text v-if="selectedPhoto.description">
-          {{ selectedPhoto.description }}
-        </v-card-text>
-
-        <v-card-actions>
-          <v-spacer />
-          <v-btn color="primary" variant="text" @click="closeModal">
-            Close
-          </v-btn>
-
-          <v-btn variant="text" v-if="isAdmin" @click="editPhoto">
-            Edit
-          </v-btn>
-          <v-btn
-            variant="text"
-            color="red"
-            v-if="isAdmin"
-            @click="deleteConfirm = true"
-          >
-            Delete
-          </v-btn>
-        </v-card-actions>
-
-      </v-card>
-    </v-dialog>
-    <v-dialog v-model="deleteConfirm" max-width="400">
-        <v-card>
-          <v-card-title class="text-h6">
-            削除しますか
-          </v-card-title>
-          <v-card-text>
-            この画像を削除しますか？
-          </v-card-text>
           <v-card-actions>
             <v-spacer />
-            <v-btn
-              variant="text"
-              @click="deleteConfirm = false"
-            >
-              Cancel
-            </v-btn>
-            <v-btn
-              color="red"
-              variant="text"
-              @click="confirmDelete"
-            >
-              Delete
-            </v-btn>
+            <v-btn color="primary" variant="text" @click="closeModal">Close</v-btn>
+            <v-btn variant="text" v-if="isAdmin" @click="editPhoto">Edit</v-btn>
+            <v-btn variant="text" color="red" v-if="isAdmin" @click="deleteConfirm = true">Delete</v-btn>
           </v-card-actions>
         </v-card>
       </v-dialog>
-  </v-container>
-  <v-dialog v-model="formModal" max-width="600">
-    <v-card>
-      <v-card-title>
-        {{ isEditMode ? 'Edit Photo' : 'Upload Photo' }}
-      </v-card-title>
-      <v-form ref="formRef" v-model="isFormValid">
-        <v-card-text>
-          <v-text-field
-            v-model="form.title"
-            label="Title"
-            :rules="[requiredRule]"
-          />
-          <v-text-field
-            v-model="form.date"
-            label="Date"
-            type="date"
-            :rules="[requiredRule]"
-          />
-          <v-textarea
-            v-model="form.description"
-            label="Description"
-          />
-          <v-text-field
-            v-model="form.images[0]"
-            label="Image URL"
-            :rules="[requiredRule]"
-          />
-          <v-combobox
-            v-model="form.tags"
-            v-model:search="tagSearch"
-            :items="filteredTagOptions"
-            label="Tags"
-            multiple
-            chips
-            clearable
-            attach="body"
-            :menu-props="{
-              location: 'bottom',
-              maxHeight: 80
-            }"
-            :rules="[requiredRule]"
-          />
-        </v-card-text>
-      </v-form>
-      <v-card-actions>
-        <v-spacer />
-        <v-btn variant="text" @click="cancelForm">
-          Cancel
-        </v-btn>
-        <v-btn
-          color="primary"
-          variant="text"
-          :disabled="!isFormValid"
-          @click="savePhoto"
-        >
-          Save
-        </v-btn>
-      </v-card-actions>
-    </v-card>
-  </v-dialog>
+
+      <v-dialog v-model="deleteConfirm" max-width="400">
+        <v-card>
+          <v-card-title class="text-h6">削除しますか</v-card-title>
+          <v-card-text>この画像を削除しますか？</v-card-text>
+          <v-card-actions>
+            <v-spacer />
+            <v-btn variant="text" @click="deleteConfirm = false">Cancel</v-btn>
+            <v-btn color="red" variant="text" @click="confirmDelete">Delete</v-btn>
+          </v-card-actions>
+        </v-card>
+      </v-dialog>
+    </v-container>
+
+    <v-dialog v-model="formModal" max-width="600">
+      <v-card>
+        <v-card-title>{{ isEditMode ? 'Edit Photo' : 'Upload Photo' }}</v-card-title>
+        <v-form ref="formRef" v-model="isFormValid">
+          <v-card-text>
+            <v-text-field v-model="form.title" label="Title" :rules="[requiredRule]" />
+            <v-text-field v-model="form.date" label="Date" type="date" :rules="[requiredRule]" />
+            <v-textarea v-model="form.description" label="Description" />
+            <v-text-field v-model="form.images[0]" label="Image URL" :rules="[requiredRule]" />
+            <v-combobox
+              v-model="form.tags"
+              v-model:search="tagSearch"
+              :items="filteredTagOptions"
+              label="Tags"
+              multiple
+              chips
+              clearable
+              attach="body"
+              :menu-props="{ location: 'bottom', maxHeight: 80 }"
+              :rules="[requiredRule]"
+            />
+          </v-card-text>
+        </v-form>
+        <v-card-actions>
+          <v-spacer />
+          <v-btn variant="text" @click="cancelForm">Cancel</v-btn>
+          <v-btn color="primary" variant="text" :disabled="!isFormValid" @click="savePhoto">Save</v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+  </div>
 </template>
 
 <script setup>
@@ -225,13 +145,11 @@
   const isFormValid = ref(false)
 
   const { smAndUp } = useDisplay()
-
-  // ユーザーログイン
   const auth = useAuthStore()
   const isAdmin = computed(() => auth.isAdmin)
-  onMounted(() => {
-    auth.loadUser()
-  })
+
+  onMounted(() => auth.loadUser())
+
 
   function loginAsAdmin() {
     auth.login({ id: 1, name: 'Admin', role: 'admin' })
@@ -269,6 +187,60 @@
     }
     return !!value || 'Required field'
   }
+
+  // Dummy Data
+  const photos = ref([
+    {
+      id: 1,
+      title: 'First Photo',
+      date: '2025-02-10',
+      description: 'description01',
+      images: [
+        'https://picsum.photos/600/400?1',
+        'https://picsum.photos/600/400?11',
+        'https://picsum.photos/600/400?12',
+      ],
+      tags: ['travel', 'spring'],
+    },
+    {
+      id: 2,
+      title: 'Second Photo',
+      date: '2025-02-09',
+      description: 'description02',
+      images: [
+        'https://picsum.photos/300/500?2',
+        'https://picsum.photos/600/400?21',
+      ],
+      tags: ['travel', 'summer'],
+    },
+    {
+      id: 3,
+      title: 'Third Photo',
+      date: '2025-02-08',
+      description: 'description03',
+      images: ['https://picsum.photos/300/500?8'],
+      tags: ['travel', 'Autumn'],
+    },
+    {
+      id: 4,
+      title: 'Fourth Photo',
+      date: '2025-02-07',
+      description: 'description04',
+      images: ['https://picsum.photos/600/400?5'],
+      tags: ['travel', 'winter'],
+    },
+    {
+      id: 5,
+      title: 'Second Photo',
+      date: '2025-02-09',
+      description: 'description02',
+      images: [
+        'https://picsum.photos/300/500?2',
+        'https://picsum.photos/600/400?21',
+      ],
+      tags: ['travel', 'summer'],
+    },
+  ])
 
   // タグ集計
   const allTags = computed(() => {
@@ -316,49 +288,6 @@
       photo.tags?.includes(selectedTag.value)
     )
   })
-
-  // Dummy Data
-  const photos = ref([
-    {
-      id: 1,
-      title: 'First Photo',
-      date: '2025-02-10',
-      description: 'description01',
-      images: [
-        'https://picsum.photos/600/400?1',
-        'https://picsum.photos/600/400?11',
-        'https://picsum.photos/600/400?12',
-      ],
-      tags: ['travel', 'spring'],
-    },
-    {
-      id: 2,
-      title: 'Second Photo',
-      date: '2025-02-09',
-      description: 'description02',
-      images: [
-        'https://picsum.photos/600/400?2',
-        'https://picsum.photos/600/400?21',
-      ],
-      tags: ['travel', 'summer'],
-    },
-    {
-      id: 3,
-      title: 'Third Photo',
-      date: '2025-02-08',
-      description: 'description03',
-      images: ['https://picsum.photos/600/400?3'],
-      tags: ['travel', 'Autumn'],
-    },
-    {
-      id: 4,
-      title: 'Fourth Photo',
-      date: '2025-02-07',
-      description: 'description04',
-      images: ['https://picsum.photos/600/400?5'],
-      tags: ['travel', 'winter'],
-    },
-  ])
 
   const showArrows = computed(() => {
     if (!selectedPhoto.value) return false
@@ -417,7 +346,6 @@
     resetForm()
   }
 
-
   function formatTag(tag) {
     return tag.charAt(0).toUpperCase() + tag.slice(1)
   }
@@ -455,7 +383,43 @@
 </script>
 
 <style scoped>
-  .cursor-pointer {
-    cursor: pointer;
+  .page-background {
+    min-height: 100vh;
+    background: linear-gradient(135deg, #e8edf5 0%, #cfd8e6 100%);
+    padding: 40px 0;
+  }
+
+  .gallery {
+    column-width: 280px;
+    column-gap: 17px;
+  }
+
+  .photo-card {
+    margin-bottom: 16px;
+    break-inside: avoid;
+  }
+
+  .modal-carousel {
+    height: auto !important;
+  }
+
+  .modal-image {
+    max-width: 90vw;
+    max-height: 85vh;
+    width: auto;
+    height: auto;
+    object-fit: contain;
+  }
+
+  .v-card {
+    border-radius: 18px !important;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08) !important;
+    transition: all 0.3s ease;
+  }
+
+  .v-card:not(.modal-card):hover {
+    transform: translateY(-6px);
+    box-shadow: 0 14px 32px rgba(0, 0, 0, 0.12) !important;
   }
 </style>
+
