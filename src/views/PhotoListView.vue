@@ -301,7 +301,18 @@
   // 開く
   function openPhoto(photo) {
     selectedPhoto.value = photo
-    showModal.value = true
+
+    const imagePromises = photo.images.map(src => {
+      return new Promise(resolve => {
+        const img = new Image()
+        img.src = src
+        img.onload = resolve
+      })
+    })
+
+    Promise.all(imagePromises).then(() => {
+      showModal.value = true
+    })
   }
 
   // 閉じる
