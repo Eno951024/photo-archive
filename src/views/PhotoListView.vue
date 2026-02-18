@@ -42,7 +42,7 @@
           elevation="2"
           @click="openPhoto(photo)"
         >
-          <v-img :src="photo.images[0]" class="gallery-image" />
+          <v-img v-if="photo.images && photo.images.length" :src="photo.images[0]" class="gallery-image" />
           <v-card-title class="text-h6">{{ photo.title }}</v-card-title>
           <v-card-subtitle class="text-subtitle-1">{{ photo.date }}</v-card-subtitle>
         </v-card>
@@ -58,7 +58,7 @@
               :continuous="false"
               class="modal-carousel"
             >
-              <v-carousel-item v-for="(img, index) in selectedPhoto.images" :key="index">
+              <v-carousel-item v-for="(img, index) in selectedPhoto.images || []" :key="index">
                 <div class="modal-image-wrapper">
                   <img :src="img" class="modal-image" />
                 </div>
@@ -101,7 +101,7 @@
             <v-text-field v-model="form.title" label="Title" :rules="[requiredRule]" />
             <v-text-field v-model="form.date" label="Date" type="date" :rules="[requiredRule]" />
             <v-textarea v-model="form.description" label="Description" />
-            <v-text-field v-model="form.images[0]" label="Image URL" :rules="[requiredRule]" />
+            <v-file-input v-model="form.file" label="Upload Image" accept="image/*" :rules="[fileRequiredRule]" />
             <v-combobox
               v-model="form.tags"
               v-model:search="tagSearch"
@@ -130,6 +130,7 @@
   import { ref, computed, onMounted } from 'vue'
   import { useDisplay } from 'vuetify'
   import { useAuthStore } from '@/stores/auth.js'
+  import { supabase } from '@/supabase.js'
 
   const showModal = ref(false)
   const selectedPhoto = ref(null)
@@ -148,7 +149,11 @@
   const auth = useAuthStore()
   const isAdmin = computed(() => auth.isAdmin)
 
-  onMounted(() => auth.loadUser())
+  onMounted(async () => {
+    auth.loadUser()
+    photos.value = await fetchPhotos()
+  })
+
 
 
   function loginAsAdmin() {
@@ -166,6 +171,7 @@
     date: '',
     description: '',
     images: [],
+    file: null,
     tags: [],
   })
 
@@ -177,6 +183,7 @@
       date: '',
       description: '',
       images: [],
+      file: null,
       tags: [],
     }
   }
@@ -322,37 +329,64 @@
   }
 
   // アップロード、修正保存
-  function savePhoto() {
-
+  async function savePhoto() {
     if (!formRef.value.validate()) return
+    if (!form.value.file) return alert('Please select a file')
 
-    const normalizedTags = form.value.tags.map(tag =>
-      tag.trim().toLowerCase()
-    )
+    let imageUrls = [...form.value.images]
 
-    if (isEditMode.value) {
-
-      // 修正
-      const index = photos.value.findIndex(
-        p => p.id === form.value.id
-      )
-
-      if (index !== -1) {
-        photos.value[index] = {
-          ...form.value,
-          tags: normalizedTags
-        }
-      }
-    } else {
-      
-      // アップロード
-      photos.value.push({
-        ...form.value,
-        id: Date.now(),
-        tags: normalizedTags
-      })
+    if (form.value.file) {
+      const url = await uploadPhotoFile(form.value.file)
+      if (!url) return alert('Upload failed')
+      imageUrls.push(url)
     }
 
+    const photo = {
+      title: form.value.title,
+      date: form.value.date,
+      description: form.value.description,
+      images: imageUrls,
+      tags: form.value.tags,
+    }
+
+    async function savePhoto() {
+      if (!formRef.value.validate()) return
+
+      let imageUrls = [...form.value.images]
+
+      if (form.value.file) {
+        const url = await uploadPhotoFile(form.value.file)
+        if (!url) return alert('Upload failed')
+        imageUrls.push(url)
+      }
+
+      const photo = {
+        title: form.value.title,
+        date: form.value.date,
+        description: form.value.description,
+        images: imageUrls,
+        tags: form.value.tags,
+      }
+
+      if (form.value.id) {
+        await supabase
+          .from('photos')
+          .update(photo)
+          .eq('id', form.value.id)
+      } else {
+        await supabase
+          .from('photos')
+          .insert(photo)
+      }
+
+      photos.value = await fetchPhotos()
+      formModal.value = false
+      resetForm()
+    }
+
+
+    await savePhotoToDB(photo)
+    photos.value = await fetchPhotos()
     formModal.value = false
     resetForm()
   }
@@ -390,6 +424,51 @@
   function cancelForm() {
     formModal.value = false
     resetForm()
+  }
+
+  async function uploadPhotoFile(file) {
+    const fileName = `${Date.now()}_${encodeURIComponent(file.name)}`
+
+    const { error } = await supabase.storage
+      .from('photo_archive')
+      .upload(fileName, file)
+
+    if (error) {
+      console.error('Upload error:', error)
+      return null
+    }
+
+    const { data } = supabase.storage
+      .from('photo_archive')
+      .getPublicUrl(fileName)
+
+    return data.publicUrl
+  }
+
+
+  async function savePhotoToDB(photo) {
+    const { data, error } = await supabase
+      .from('photos')
+      .insert([photo])
+
+    console.log('DB insert result:', data)
+    console.log('DB insert error:', error)
+
+    if (error) throw error
+  }
+
+  async function fetchPhotos() {
+    const { data, error } = await supabase
+      .from('photos')
+      .select('*')
+      .order('created_at', { ascending: false })
+
+    if (error) {
+      console.error('Fetch error:', error)
+      return []
+    }
+
+    return data
   }
 </script>
 
