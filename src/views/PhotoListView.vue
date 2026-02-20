@@ -42,7 +42,7 @@
           elevation="2"
           @click="openPhoto(photo)"
         >
-          <v-img v-if="photo.images && photo.images.length" :src="photo.images[0]" class="gallery-image" />
+          <v-img v-if="photo.images?.length" :src="photo.images[0]" class="gallery-image" />
           <v-card-title class="text-h6">{{ photo.title }}</v-card-title>
           <v-card-subtitle class="text-subtitle-1">{{ photo.date }}</v-card-subtitle>
         </v-card>
@@ -58,7 +58,7 @@
               :continuous="false"
               class="modal-carousel"
             >
-              <v-carousel-item v-for="(img, index) in selectedPhoto.images || []" :key="index">
+              <v-carousel-item v-for="(img, index) in selectedPhoto.images" :key="index">
                 <div class="modal-image-wrapper">
                   <img :src="img" class="modal-image" />
                 </div>
@@ -75,25 +75,25 @@
             <v-spacer />
             <v-btn color="primary" variant="text" @click="closeModal">Close</v-btn>
             <v-btn variant="text" v-if="isAdmin" @click="editPhoto">Edit</v-btn>
-            <v-btn variant="text" color="red" v-if="isAdmin" @click="deleteConfirm = true">Delete</v-btn>
+            <v-btn variant="text" color="red" v-if="isAdmin" @click="modalClose = true">Delete</v-btn>
           </v-card-actions>
         </v-card>
       </v-dialog>
 
-      <v-dialog v-model="deleteConfirm" max-width="400">
+      <v-dialog v-model="modalClose" max-width="400">
         <v-card>
           <v-card-title class="text-h6">削除しますか</v-card-title>
           <v-card-text>この画像を削除しますか？</v-card-text>
           <v-card-actions>
             <v-spacer />
-            <v-btn variant="text" @click="deleteConfirm = false">Cancel</v-btn>
-            <v-btn color="red" variant="text" @click="confirmDelete">Delete</v-btn>
+            <v-btn variant="text" @click="modalClose = false">Cancel</v-btn>
+            <v-btn color="red" variant="text" @click="deletePhoto">Delete</v-btn>
           </v-card-actions>
         </v-card>
       </v-dialog>
     </v-container>
 
-    <v-dialog v-model="formModal" max-width="600">
+    <v-dialog v-model="formModal" persistent max-width="600">
       <v-card>
         <v-card-title>{{ isEditMode ? 'Edit Photo' : 'Upload Photo' }}</v-card-title>
         <v-form ref="formRef" v-model="isFormValid">
@@ -101,7 +101,31 @@
             <v-text-field v-model="form.title" label="Title" :rules="[requiredRule]" />
             <v-text-field v-model="form.date" label="Date" type="date" :rules="[requiredRule]" />
             <v-textarea v-model="form.description" label="Description" />
-            <v-file-input v-model="form.file" label="Upload Image" accept="image/*" :rules="[fileRequiredRule]" />
+            <v-file-input
+              v-model="form.files"
+              label="Upload Images"
+              accept="image/*"
+              multiple
+              :rules="[fileRule]"
+            />
+            <div v-if="form.images.length">
+              <div
+                v-for="(img, index) in form.images"
+                :key="index"
+                class="edit-image-wrapper"
+              >
+              <img :src="img" class="edit-thumbnail" />
+              <v-btn
+                icon
+                size="x-small"
+                color="red"
+                class="delete-btn"
+                @click="removeImage(index)"
+              >
+                <v-icon size="15">mdi-close</v-icon>
+              </v-btn>
+              </div>
+            </div>
             <v-combobox
               v-model="form.tags"
               v-model:search="tagSearch"
@@ -110,7 +134,7 @@
               multiple
               chips
               clearable
-              attach="body"
+              location-strategy="connected"
               :menu-props="{ location: 'bottom', maxHeight: 80 }"
               :rules="[requiredRule]"
             />
@@ -119,7 +143,15 @@
         <v-card-actions>
           <v-spacer />
           <v-btn variant="text" @click="cancelForm">Cancel</v-btn>
-          <v-btn color="primary" variant="text" :disabled="!isFormValid" @click="savePhoto">Save</v-btn>
+          <v-btn
+            color="primary"
+            variant="text"
+            :disabled="!isFormValid|| isSaving"
+            :loading="isSaving"
+            @click="savePhoto"
+            >
+              Save
+          </v-btn>
         </v-card-actions>
       </v-card>
     </v-dialog>
@@ -136,7 +168,7 @@
   const selectedPhoto = ref(null)
   const hovering = ref(false)
   const formModal = ref(false)
-  const deleteConfirm = ref(false)
+  const modalClose = ref(false)
   const isEditMode = ref(false)
 
   const selectedTag = ref(null)
@@ -144,17 +176,17 @@
 
   const formRef = ref(null)
   const isFormValid = ref(false)
+  const isSaving = ref(false)
 
   const { smAndUp } = useDisplay()
   const auth = useAuthStore()
   const isAdmin = computed(() => auth.isAdmin)
+  const photos = ref([])
 
   onMounted(async () => {
     auth.loadUser()
     photos.value = await fetchPhotos()
   })
-
-
 
   function loginAsAdmin() {
     auth.login({ id: 1, name: 'Admin', role: 'admin' })
@@ -171,7 +203,7 @@
     date: '',
     description: '',
     images: [],
-    file: null,
+    files: [],
     tags: [],
   })
 
@@ -183,7 +215,7 @@
       date: '',
       description: '',
       images: [],
-      file: null,
+      files: [],
       tags: [],
     }
   }
@@ -195,59 +227,16 @@
     return !!value || 'Required field'
   }
 
-  // Dummy Data
-  const photos = ref([
-    {
-      id: 1,
-      title: 'First Photo',
-      date: '2025-02-10',
-      description: 'description01',
-      images: [
-        'https://picsum.photos/600/400?1',
-        'https://picsum.photos/600/400?11',
-        'https://picsum.photos/600/400?12',
-      ],
-      tags: ['travel', 'spring'],
-    },
-    {
-      id: 2,
-      title: 'Second Photo',
-      date: '2025-02-09',
-      description: 'description02',
-      images: [
-        'https://picsum.photos/300/500?2',
-        'https://picsum.photos/600/400?21',
-      ],
-      tags: ['travel', 'summer'],
-    },
-    {
-      id: 3,
-      title: 'Third Photo',
-      date: '2025-02-08',
-      description: 'description03',
-      images: ['https://picsum.photos/300/500?8'],
-      tags: ['travel', 'Autumn'],
-    },
-    {
-      id: 4,
-      title: 'Fourth Photo',
-      date: '2025-02-07',
-      description: 'description04',
-      images: ['https://picsum.photos/600/400?5'],
-      tags: ['travel', 'winter'],
-    },
-    {
-      id: 5,
-      title: 'Second Photo',
-      date: '2025-02-09',
-      description: 'description02',
-      images: [
-        'https://picsum.photos/300/500?2',
-        'https://picsum.photos/600/400?21',
-      ],
-      tags: ['travel', 'summer'],
-    },
-  ])
+  const fileRule = (files) => {
+    const existingCount = form.value.images.length
+    const newCount = files?.length || 0
+
+    if (existingCount + newCount > 3) {
+      return '画像は最大3枚までです'
+    }
+
+    return true
+  }
 
   // タグ集計
   const allTags = computed(() => {
@@ -331,32 +320,28 @@
   // アップロード、修正保存
   async function savePhoto() {
     if (!formRef.value.validate()) return
-    if (!form.value.file) return alert('Please select a file')
 
-    let imageUrls = [...form.value.images]
+    const totalImageCount =
+      form.value.images.length + form.value.files.length
 
-    if (form.value.file) {
-      const url = await uploadPhotoFile(form.value.file)
-      if (!url) return alert('Upload failed')
-      imageUrls.push(url)
+    if (totalImageCount === 0) {
+      alert('画像は最低1枚必要です')
+      return
     }
 
-    const photo = {
-      title: form.value.title,
-      date: form.value.date,
-      description: form.value.description,
-      images: imageUrls,
-      tags: form.value.tags,
+    if (totalImageCount > 3) {
+      alert('画像は最大3枚までです')
+      return
     }
 
-    async function savePhoto() {
-      if (!formRef.value.validate()) return
+    isSaving.value = true
 
+    try {
       let imageUrls = [...form.value.images]
 
-      if (form.value.file) {
-        const url = await uploadPhotoFile(form.value.file)
-        if (!url) return alert('Upload failed')
+      for (const file of form.value.files) {
+        const url = await uploadPhotoFile(file)
+        if (!url) throw new Error('savePhoto error')
         imageUrls.push(url)
       }
 
@@ -369,47 +354,105 @@
       }
 
       if (form.value.id) {
-        await supabase
-          .from('photos')
-          .update(photo)
-          .eq('id', form.value.id)
+        await supabase.from('photos').update(photo).eq('id', form.value.id)
       } else {
-        await supabase
-          .from('photos')
-          .insert(photo)
+        await supabase.from('photos').insert(photo)
       }
 
       photos.value = await fetchPhotos()
       formModal.value = false
       resetForm()
+
+    } catch (err) {
+      alert(err.message)
+    } finally {
+      isSaving.value = false
+    }
+  }
+
+  async function uploadPhotoFile(file) {
+    const fileName = `${Date.now()}_${encodeURIComponent(file.name)}`
+
+    const { error } = await supabase.storage
+      .from('photo_archive')
+      .upload(fileName, file)
+
+    if (error) {
+      console.error('uploadPhotoFile error:', error)
+      return null
     }
 
+    const { data } = supabase.storage
+      .from('photo_archive')
+      .getPublicUrl(fileName)
 
-    await savePhotoToDB(photo)
-    photos.value = await fetchPhotos()
-    formModal.value = false
-    resetForm()
+    return data.publicUrl
   }
 
   function formatTag(tag) {
-    return tag.charAt(0).toUpperCase() + tag.slice(1)
+    tag.replace(/\b\w/g, char => char.toUpperCase());
+  }
+
+  function removeImage(index) {
+    form.value.images.splice(index, 1)
   }
 
   // 編集
   function editPhoto() {
     isEditMode.value = true
-    form.value = { ...selectedPhoto.value }
+
+    form.value = {
+      id: selectedPhoto.value.id,
+      title: selectedPhoto.value.title,
+      date: selectedPhoto.value.date,
+      description: selectedPhoto.value.description,
+      images: [...selectedPhoto.value.images],
+      files: [],
+      tags: [...(selectedPhoto.value.tags || [])],
+    }
+
     showModal.value = false
     formModal.value = true
   }
 
   // 削除
-  function confirmDelete() {
-    photos.value = photos.value.filter(
-      p => p.id !== selectedPhoto.value.id
-    )
+  async function deletePhoto() {
+    if (!selectedPhoto.value?.id) return
 
-    deleteConfirm.value = false
+    try {
+      const paths = selectedPhoto.value.images.map(url => {
+        return url.split('/photo_archive/')[1]
+      })
+
+      if (paths.length) {
+        const { error: storageError } = await supabase.storage
+          .from('photo_archive')
+          .remove(paths)
+
+        if (storageError) {
+          console.error(storageError)
+          throw new Error('Storage削除失敗')
+        }
+      }
+
+      const { error: dbError } = await supabase
+        .from('photos')
+        .delete()
+        .eq('id', selectedPhoto.value.id)
+
+      if (dbError) {
+        console.error(dbError)
+        throw new Error('DB削除失敗')
+      }
+
+      photos.value = await fetchPhotos()
+
+    } catch (err) {
+      alert(err.message)
+      return
+    }
+
+    modalClose.value = false
     closeModal()
   }
 
@@ -426,36 +469,6 @@
     resetForm()
   }
 
-  async function uploadPhotoFile(file) {
-    const fileName = `${Date.now()}_${encodeURIComponent(file.name)}`
-
-    const { error } = await supabase.storage
-      .from('photo_archive')
-      .upload(fileName, file)
-
-    if (error) {
-      console.error('Upload error:', error)
-      return null
-    }
-
-    const { data } = supabase.storage
-      .from('photo_archive')
-      .getPublicUrl(fileName)
-
-    return data.publicUrl
-  }
-
-
-  async function savePhotoToDB(photo) {
-    const { data, error } = await supabase
-      .from('photos')
-      .insert([photo])
-
-    console.log('DB insert result:', data)
-    console.log('DB insert error:', error)
-
-    if (error) throw error
-  }
 
   async function fetchPhotos() {
     const { data, error } = await supabase
@@ -510,6 +523,31 @@
   .v-card:not(.modal-card):hover {
     transform: translateY(-6px);
     box-shadow: 0 14px 32px rgba(0, 0, 0, 0.12) !important;
+  }
+
+  .edit-image-wrapper {
+    position: relative;
+    display: inline-block;
+    margin: 8px;
+  }
+
+  .edit-thumbnail {
+    width: 100px;
+    border-radius: 12px;
+  }
+
+  .delete-btn {
+    position: absolute;
+    top: -8px;
+    right: -8px;
+    background: white;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+    opacity: 0;
+    transition: 0.2s;
+  }
+
+  .edit-image-wrapper:hover .delete-btn {
+    opacity: 1;
   }
 </style>
 
