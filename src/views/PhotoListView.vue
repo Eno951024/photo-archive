@@ -2,18 +2,30 @@
   <div class="page-background">
     <v-container class="py-1">
       <v-row class="mb-2">
-        <v-col class="text-left pa-1">
-          <v-btn color="success" small @click="loginAsAdmin">
-            Login as Admin
-          </v-btn>
-          <v-btn color="grey" small @click="logout">
-            Logout
-          </v-btn>
-        </v-col>
         <v-col class="text-right pa-1">
-          <v-btn color="primary" v-if="isAdmin" @click="openCreateModal">
-            Upload Photo
+          <v-btn
+            v-if="!isAdmin"
+            color="primary"
+            @click="loginAsAdmin"
+          >
+            Login
           </v-btn>
+          <template v-else>
+            <v-btn
+              color="grey"
+              class="mr-2"
+              @click="logout"
+            >
+              Logout
+            </v-btn>
+
+            <v-btn
+              color="primary"
+              @click="openCreateModal"
+            >
+              Upload Photo
+            </v-btn>
+          </template>
         </v-col>
       </v-row>
 
@@ -48,7 +60,7 @@
         </v-card>
       </div>
 
-      <v-dialog v-model="showModal" persistent scrollable width="auto">
+      <v-dialog v-model="showModal" persistent width="auto">
         <v-card v-if="selectedPhoto" class="modal-card">
           <div @mouseenter="hovering = true" @mouseleave="hovering = false">
             <v-carousel
@@ -69,8 +81,27 @@
           <v-card-title>{{ selectedPhoto.title }}</v-card-title>
           <v-card-subtitle>{{ selectedPhoto.date }}</v-card-subtitle>
 
-          <v-card-text v-if="selectedPhoto.description">{{ selectedPhoto.description }}</v-card-text>
+          <v-card-text>
+            <div v-if="selectedPhoto.description">
+              {{ selectedPhoto.description }}
+            </div>
 
+            <div
+              v-if="selectedPhoto.tags?.length"
+              class="mt-4"
+            >
+              <v-chip
+                v-for="tag in selectedPhoto.tags"
+                :key="tag"
+                class="ma-1"
+                size="small"
+                color="primary"
+                variant="outlined"
+              >
+                {{ formatTag(tag) }}
+              </v-chip>
+            </div>
+          </v-card-text>
           <v-card-actions>
             <v-spacer />
             <v-btn color="primary" variant="text" @click="closeModal">Close</v-btn>
@@ -136,7 +167,7 @@
               clearable
               location-strategy="connected"
               :menu-props="{ location: 'bottom', maxHeight: 80 }"
-              :rules="[requiredRule]"
+              :rules="[requiredRule, tagLimitRule]"
             />
           </v-card-text>
         </v-form>
@@ -227,6 +258,11 @@
     return !!value || 'Required field'
   }
 
+  const tagLimitRule = value => {
+    if (!value) return true
+    return value.length <= 5 || 'タグは最大5個までです'
+  }
+
   const fileRule = (files) => {
     const existingCount = form.value.images.length
     const newCount = files?.length || 0
@@ -258,7 +294,6 @@
   // タグ自動完成
   const filteredTagOptions = computed(() => {
     if (!tagSearch.value || tagSearch.value.length < 1) return []
-
     return allTags.value
       .map(t => t.name)
       .filter(tag =>
@@ -390,7 +425,7 @@
   }
 
   function formatTag(tag) {
-    tag.replace(/\b\w/g, char => char.toUpperCase());
+    return tag.replace(/\b\w/g, char => char.toUpperCase());
   }
 
   function removeImage(index) {
