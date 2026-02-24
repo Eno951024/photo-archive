@@ -4,9 +4,9 @@
       <v-row class="mb-2">
         <v-col class="text-right pa-1">
           <v-btn
-            v-if="!isAdmin"
+            v-if="!auth.isAdmin"
             color="primary"
-            @click="loginAsAdmin"
+            @click="loginModal = true"
           >
             Login
           </v-btn>
@@ -122,9 +122,37 @@
           </v-card-actions>
         </v-card>
       </v-dialog>
+      <v-dialog v-model="loginModal" max-width="400">
+        <v-card>
+          <v-card-title>Admin Login</v-card-title>
+          <v-card-text>
+            <v-text-field
+              v-model="loginEmail"
+              autocomplete="off"
+              label="Email"
+            />
+            <v-text-field
+              v-model="loginPassword"
+              label="Password"
+              type="password"
+              autocomplete="new-password"
+            />
+          </v-card-text>
+          <v-card-actions>
+            <v-spacer />
+            <v-btn variant="text" @click="loginModal = false">
+              Cancel
+            </v-btn>
+            <v-btn color="primary" @click="login">
+              Login
+            </v-btn>
+          </v-card-actions>
+        </v-card>
+      </v-dialog>
     </v-container>
 
     <v-dialog v-model="formModal" persistent max-width="600">
+      
       <v-card>
         <v-card-title>{{ isEditMode ? 'Edit Photo' : 'Upload Photo' }}</v-card-title>
         <v-form ref="formRef" v-model="isFormValid">
@@ -190,7 +218,7 @@
 </template>
 
 <script setup>
-  import { ref, computed, onMounted } from 'vue'
+  import { ref, computed, onMounted, watch } from 'vue'
   import { useDisplay } from 'vuetify'
   import { useAuthStore } from '@/stores/auth.js'
   import { supabase } from '@/supabase.js'
@@ -211,20 +239,44 @@
 
   const { smAndUp } = useDisplay()
   const auth = useAuthStore()
-  const isAdmin = computed(() => auth.isAdmin)
+  const isAdmin = ref(false)
   const photos = ref([])
 
+  const loginModal = ref(false)
+  const loginEmail = ref('')
+  const loginPassword = ref('')
+
   onMounted(async () => {
-    auth.loadUser()
+    await auth.loadUser()
     photos.value = await fetchPhotos()
   })
 
-  function loginAsAdmin() {
-    auth.login({ id: 1, name: 'Admin', role: 'admin' })
+  async function logout() {
+    await auth.logout()
   }
 
-  function logout() {
-    auth.logout()
+  watch(
+    () => auth.role,
+    (newRole) => {
+      isAdmin.value = newRole === 'admin'
+    },
+    { immediate: true }
+  )
+
+  watch(loginModal, (val) => {
+    if (val) {
+      loginEmail.value = ''
+      loginPassword.value = ''
+    }
+  })
+
+  async function login() {
+    try {
+      await auth.login(loginEmail.value, loginPassword.value)
+      loginModal.value = false
+    } catch (err) {
+      alert('IDかパスワードが違います')
+    }
   }
 
   // アップロードフォーム
@@ -253,9 +305,9 @@
 
   const requiredRule = value => {
     if (Array.isArray(value)) {
-      return value.length > 0 || 'Required field'
+      return value.length > 0 || '必須項目です'
     }
-    return !!value || 'Required field'
+    return !!value || '必須項目です'
   }
 
   const tagLimitRule = value => {
