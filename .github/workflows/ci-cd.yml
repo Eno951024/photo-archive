@@ -44,8 +44,8 @@ jobs:
   build-and-push-docker:
     needs: lint-and-build
     runs-on: ubuntu-latest
-    # 태그 푸시 시에만 Docker Hub에 push
-    if: startsWith(github.ref, 'refs/tags/')
+    # develop 브랜치 push 또는 태그 푸시 시에만 Docker Hub에 push
+    if: github.ref == 'refs/heads/develop' || startsWith(github.ref, 'refs/tags/')
 
     steps:
       - name: Checkout code
@@ -66,6 +66,7 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
+            type=raw,value=dev-${{ github.run_number }},enable=${{ github.ref == 'refs/heads/develop' }}
             type=ref,event=tag
 
       - name: Build and push Docker image
