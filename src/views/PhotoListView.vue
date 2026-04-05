@@ -274,7 +274,7 @@
     try {
       await auth.login(loginEmail.value, loginPassword.value)
       loginModal.value = false
-    } catch (err) {
+    } catch {
       alert('IDかパスワードが違います')
     }
   }
