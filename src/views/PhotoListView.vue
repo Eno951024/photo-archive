@@ -221,6 +221,7 @@
   import { ref, computed, onMounted, watch } from 'vue'
   import { useDisplay } from 'vuetify'
   import { useAuthStore } from '@/stores/auth.js'
+  import { supabase } from '@/supabase.js'
   import axios from 'axios'
 
   const showModal = ref(false)
@@ -441,9 +442,9 @@
       }
 
       if (form.value.id) {
-        await axios.patch(`/api/photos/${form.value.id}`, photo)
+        await supabase.from('photos').update(photo).eq('id', form.value.id)
       } else {
-        await axios.post('/api/photos', photo)
+        await supabase.from('photos').insert(photo)
       }
 
       photos.value = await fetchPhotos()
@@ -458,16 +459,22 @@
   }
 
   async function uploadPhotoFile(file) {
-    const formData = new FormData()
-    formData.append('file', file)
+    const fileName = `${Date.now()}_${encodeURIComponent(file.name)}`
 
-    try {
-      const { data } = await axios.post('/api/photos/upload', formData)
-      return data.url
-    } catch (err) {
-      console.error('uploadPhotoFile error:', err)
+    const { error } = await supabase.storage
+      .from('photo_archive')
+      .upload(fileName, file)
+
+    if (error) {
+      console.error('uploadPhotoFile error:', error)
       return null
     }
+
+    const { data } = supabase.storage
+      .from('photo_archive')
+      .getPublicUrl(fileName)
+
+    return data.publicUrl
   }
 
   function formatTag(tag) {
@@ -501,12 +508,35 @@
     if (!selectedPhoto.value?.id) return
 
     try {
-      await axios.delete(`/api/photos/${selectedPhoto.value.id}`)
+      const paths = selectedPhoto.value.images.map(url => {
+        return url.split('/photo_archive/')[1]
+      })
+
+      if (paths.length) {
+        const { error: storageError } = await supabase.storage
+          .from('photo_archive')
+          .remove(paths)
+
+        if (storageError) {
+          console.error(storageError)
+          throw new Error('Storage削除失敗')
+        }
+      }
+
+      const { error: dbError } = await supabase
+        .from('photos')
+        .delete()
+        .eq('id', selectedPhoto.value.id)
+
+      if (dbError) {
+        console.error(dbError)
+        throw new Error('DB削除失敗')
+      }
+
       photos.value = await fetchPhotos()
 
     } catch (err) {
-      console.error(err)
-      alert('削除失敗')
+      alert(err.message)
       return
     }
 
@@ -528,6 +558,17 @@
   }
 
   async function fetchPhotos() {
+    // const { data, error } = await supabase
+    //   .from('photos')
+    //   .select('*')
+    //   .order('date', { ascending: false })
+
+    // if (error) {
+    //   console.error('Fetch error:', error)
+    //   return []
+    // }
+
+    // return data
     const res = await axios.get('/api/photos')
     return res.data
   }
