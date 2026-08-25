@@ -222,7 +222,7 @@
   import { useDisplay } from 'vuetify'
   import { useAuthStore } from '@/stores/auth.js'
   import { supabase } from '@/supabase.js'
-  import axios from 'axios'
+  // import axios from 'axios'
 
   const showModal = ref(false)
   const selectedPhoto = ref(null)
@@ -558,19 +558,16 @@
   }
 
   async function fetchPhotos() {
-    // const { data, error } = await supabase
-    //   .from('photos')
-    //   .select('*')
-    //   .order('date', { ascending: false })
+    const { data, error } = await supabase
+      .from('photos')
+      .select('*')
+      .order('date', { ascending: false })
 
-    // if (error) {
-    //   console.error('Fetch error:', error)
-    //   return []
-    // }
-
-    // return data
-    const res = await axios.get('/api/photos')
-    return res.data
+    if (error) {
+      console.error('Fetch error:', error)
+      return []
+    }
+    return data
   }
 </script>
 
